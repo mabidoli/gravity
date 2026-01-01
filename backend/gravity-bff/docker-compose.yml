@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gravity_api
+    ports:
+      - "${API_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - REDIS_HOST=cache
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - gravity_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  db:
+    image: postgres:15-alpine
+    container_name: gravity_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-gravity}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_DB: ${DB_NAME:-gravity_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gravity_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gravity} -d ${DB_NAME:-gravity_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cache:
+    image: redis:7-alpine
+    container_name: gravity_cache
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gravity_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: migrate/migrate:v4.17.0
+    container_name: gravity_migrate
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://${DB_USER:-gravity}:${DB_PASSWORD:-secret}@db:5432/${DB_NAME:-gravity_db}?sslmode=${DB_SSL_MODE:-disable}",
+      "up"
+    ]
+    volumes:
+      - ./migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gravity_net
+    restart: on-failure
+
+networks:
+  gravity_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
