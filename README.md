@@ -28,26 +28,39 @@ Gravity rejects the siloed app model in favor of a conversation-centric paradigm
 - **Framework**: Express.js
 - **API**: RESTful endpoints
 
+## Repository Organization
+
+This repository follows a **component-based organization** where all files related to a specific part of the system are contained within that component's directory:
+
+- **Root Level**: Only overall project documentation, monorepo configuration, and cross-cutting concerns
+- **`frontend/`**: All frontend-related code, documentation, and planning files
+- **`backend/`**: All backend-related code, documentation, and planning files
+
+> **Important**: When adding documentation, tasks, or planning files, always place them in the appropriate component directory (frontend/ or backend/), not at the root level.
+
 ## Project Structure
 
 ```
 gravity/
-├── frontend/           # Next.js frontend application
+├── frontend/              # Next.js frontend application
 │   ├── src/
-│   │   ├── app/        # Next.js App Router pages
-│   │   ├── components/ # React components
-│   │   ├── lib/        # Utility functions
-│   │   ├── store/      # Zustand state management
-│   │   ├── types/      # TypeScript interfaces
-│   │   └── data/       # Mock data
+│   │   ├── app/           # Next.js App Router pages
+│   │   ├── components/    # React components
+│   │   ├── lib/           # Utility functions
+│   │   ├── store/         # Zustand state management
+│   │   ├── types/         # TypeScript interfaces
+│   │   └── data/          # Mock data
 │   └── package.json
-├── backend/            # Express.js API server
+├── backend/               # Backend API server
 │   ├── src/
-│   │   ├── routes/     # API routes
-│   │   ├── types/      # TypeScript interfaces
-│   │   └── data/       # Mock data
+│   │   ├── routes/        # API routes
+│   │   ├── types/         # TypeScript interfaces
+│   │   └── data/          # Mock data
+│   ├── plans/             # Backend planning documentation
+│   ├── tasks.md           # Backend implementation tasks
+│   ├── README-BFF.md      # Backend-for-Frontend documentation
 │   └── package.json
-└── package.json        # Root monorepo config
+└── package.json           # Root monorepo config
 ```
 
 ## Getting Started
