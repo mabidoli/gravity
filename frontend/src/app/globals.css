@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+/* Glassmorphic Zen Design System */
+:root {
+  /* Base Colors */
+  --background: #0a1419;
+  --background-secondary: #0d1a21;
+  --foreground: #e2e8f0;
+  --foreground-muted: #94a3b8;
+
+  /* Accent Colors */
+  --teal-primary: #14b8a6;
+  --teal-secondary: #0d9488;
+  --teal-glow: rgba(20, 184, 166, 0.15);
+
+  /* Priority Colors */
+  --priority-high: #ef4444;
+  --priority-medium: #f59e0b;
+  --priority-low: #22c55e;
+
+  /* Glass Effects */
+  --glass-bg: rgba(15, 23, 42, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.15);
+
+  /* Shadows */
+  --shadow-glow: 0 0 40px rgba(20, 184, 166, 0.1);
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: linear-gradient(145deg, var(--background) 0%, var(--background-secondary) 100%);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Glass Panel Utility */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+}
+
+.glass-panel-hover:hover {
+  border-color: var(--glass-border-hover);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+/* Active Glass State */
+.glass-active {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.3);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Ambient Glow */
+.glow-teal {
+  box-shadow: 0 0 30px rgba(20, 184, 166, 0.15);
+}
+
+/* Priority Indicators */
+.priority-high {
+  background: var(--priority-high);
+}
+
+.priority-medium {
+  background: var(--priority-medium);
+}
+
+.priority-low {
+  background: var(--priority-low);
+}
+
+/* Animation Utilities */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(20, 184, 166, 0.2);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Text Selection */
+::selection {
+  background: rgba(20, 184, 166, 0.3);
+  color: white;
+}
+
+/* Focus Styles */
+:focus-visible {
+  outline: 2px solid var(--teal-primary);
+  outline-offset: 2px;
+}
+
+/* Typography Utilities */
+.text-gradient {
+  background: linear-gradient(135deg, var(--teal-primary) 0%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Message Content Rendering */
+.message-content p {
+  margin-bottom: 0.5rem;
+}
+
+.message-content ul,
+.message-content ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.message-content li {
+  margin-bottom: 0.25rem;
+}
+
+.message-content strong {
+  font-weight: 600;
+  color: white;
+}
+
+/* Source Icons */
+.source-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
