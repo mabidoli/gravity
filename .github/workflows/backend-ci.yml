@@ -1,0 +1,336 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/gravity-bff/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/gravity-bff/**'
+      - '.github/workflows/backend-ci.yml'
+
+env:
+  GO_VERSION: '1.21'
+  WORKING_DIR: backend/gravity-bff
+
+jobs:
+  # ===========================================================================
+  # Lint and Format Check
+  # ===========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Run gofmt
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Code is not formatted. Run 'gofmt -w .' to fix."
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.55
+          working-directory: ${{ env.WORKING_DIR }}
+          args: --timeout=5m
+
+  # ===========================================================================
+  # Unit Tests
+  # ===========================================================================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: go test -v -race -short -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Code coverage: ${COVERAGE}%"
+          # Threshold check (80%)
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Coverage ${COVERAGE}% is below 80% threshold"
+            # Warning but don't fail for now
+            echo "::warning::Coverage is below 80% threshold"
+          fi
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ${{ env.WORKING_DIR }}/coverage.out
+          flags: unittests
+          name: gravity-bff-coverage
+        continue-on-error: true
+
+  # ===========================================================================
+  # Integration Tests
+  # ===========================================================================
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run database migrations
+        run: |
+          docker run --rm --network host \
+            -v ${{ github.workspace }}/${{ env.WORKING_DIR }}/migrations:/migrations \
+            migrate/migrate:v4.17.0 \
+            -path=/migrations \
+            -database "postgres://test:test@localhost:5433/test_db?sslmode=disable" \
+            up
+
+      - name: Run integration tests
+        run: |
+          go test -v -tags=integration ./tests/integration/...
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5433"
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_NAME: test_db
+          REDIS_HOST: localhost
+          REDIS_PORT: "6380"
+
+  # ===========================================================================
+  # Build
+  # ===========================================================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-w -s -X main.version=${{ github.sha }}" \
+            -o bin/gravity-bff \
+            ./cmd/api/main.go
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gravity-bff-binary
+          path: ${{ env.WORKING_DIR }}/bin/gravity-bff
+          retention-days: 7
+
+  # ===========================================================================
+  # Docker Build
+  # ===========================================================================
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [build, integration-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.WORKING_DIR }}
+          push: false
+          tags: gravity-bff:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: gravity-bff:${{ github.sha }}
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+
+  # ===========================================================================
+  # Performance Tests (on merge to main)
+  # ===========================================================================
+  performance-test:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: gravity
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: gravity_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Run database migrations
+        run: |
+          docker run --rm --network host \
+            -v ${{ github.workspace }}/${{ env.WORKING_DIR }}/migrations:/migrations \
+            migrate/migrate:v4.17.0 \
+            -path=/migrations \
+            -database "postgres://gravity:secret@localhost:5432/gravity_db?sslmode=disable" \
+            up
+
+      - name: Build and start application
+        run: |
+          go build -o bin/gravity-bff ./cmd/api/main.go
+          ./bin/gravity-bff &
+          sleep 5
+        env:
+          API_PORT: 8080
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: gravity
+          DB_PASSWORD: secret
+          DB_NAME: gravity_db
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run performance tests
+        run: |
+          k6 run --env API_BASE_URL=http://localhost:8080 tests/performance/stream_k6.js
+        continue-on-error: true
