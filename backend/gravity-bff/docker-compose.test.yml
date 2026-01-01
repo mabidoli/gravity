@@ -1,0 +1,56 @@
+version: '3.8'
+
+# Testing environment
+# Usage: docker-compose -f docker-compose.test.yml up -d
+
+services:
+  db_test:
+    image: postgres:15-alpine
+    container_name: gravity_db_test
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: test_db
+    ports:
+      - "5433:5432"
+    networks:
+      - gravity_test_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d test_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  cache_test:
+    image: redis:7-alpine
+    container_name: gravity_cache_test
+    ports:
+      - "6380:6379"
+    networks:
+      - gravity_test_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate_test:
+    image: migrate/migrate:v4.17.0
+    container_name: gravity_migrate_test
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://test:test@db_test:5432/test_db?sslmode=disable",
+      "up"
+    ]
+    volumes:
+      - ./migrations:/migrations:ro
+    depends_on:
+      db_test:
+        condition: service_healthy
+    networks:
+      - gravity_test_net
+    restart: on-failure
+
+networks:
+  gravity_test_net:
+    driver: bridge
