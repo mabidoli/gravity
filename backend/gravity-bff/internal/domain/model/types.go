@@ -2,10 +2,6 @@
 // These structs represent the data structures used throughout the application.
 package model
 
-import (
-	"time"
-)
-
 // SourceType represents the origin platform of a priority item.
 type SourceType string
 
