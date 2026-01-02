@@ -86,6 +86,22 @@ The planning documents are organized in a logical sequence that mirrors the deci
 
 ---
 
+### 06. Hosting Recommendation
+**File**: `06-hosting-recommendation.md`
+
+**Purpose**: Provides a comprehensive evaluation of hosting platforms and recommends the optimal deployment strategy for Gravity V2.
+
+**Key Contents**:
+- Comparison of hosting options (Vercel, AWS ECS, Lambda, hybrid approaches)
+- Cost analysis and performance benchmarks
+- Recommended architecture: AWS ECS Fargate for both frontend and backend
+- Implementation plan for unified AWS deployment
+- Cost savings analysis (70-90% vs PaaS solutions)
+
+**Use When**: Planning production deployment, evaluating hosting costs, or making infrastructure decisions.
+
+---
+
 ## How to Use This Documentation
 
 ### For Developers
@@ -96,8 +112,9 @@ The planning documents are organized in a logical sequence that mirrors the deci
 
 ### For DevOps/Infrastructure
 1. Review `02-tech-stack-recommendation.md` for infrastructure requirements
-2. Use `05-containerization.md` for deployment configurations
-3. Reference `04-test-automation.md` for CI/CD pipeline setup
+2. Use `06-hosting-recommendation.md` for hosting platform selection
+3. Use `05-containerization.md` for deployment configurations
+4. Reference `04-test-automation.md` for CI/CD pipeline setup
 
 ### For Project Managers
 1. Use `../tasks.md` for the complete task breakdown
