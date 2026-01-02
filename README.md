@@ -80,6 +80,51 @@ cd frontend && npm install
 cd ../backend && npm install
 ```
 
+### Authentication Setup (Clerk)
+
+Gravity uses [Clerk](https://clerk.com) for authentication. Follow these steps to configure it:
+
+1. **Create a Clerk Application**
+   - Go to [Clerk Dashboard](https://dashboard.clerk.com) and sign in
+   - Create a new application or select an existing one
+   - Note your API keys from the dashboard
+
+2. **Configure Frontend Environment**
+
+   Create or update `frontend/.env.local`:
+   ```bash
+   # Required - Get from Clerk Dashboard
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_key_here
+   CLERK_SECRET_KEY=sk_test_your_key_here
+
+   # Optional - Auth redirect URLs (defaults shown)
+   NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+   NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+
+   # API Configuration
+   NEXT_PUBLIC_API_URL=http://localhost:8080
+   ```
+
+3. **Configure Backend Environment**
+
+   Create or update `backend/gravity-bff/.env`:
+   ```bash
+   # Required for production - Get from Clerk Dashboard
+   CLERK_SECRET_KEY=sk_test_your_key_here
+   ```
+
+4. **Development Mode (Optional)**
+
+   For local development without Clerk, simply leave `CLERK_SECRET_KEY` unset in the backend. This enables development mode where:
+   - Backend allows unauthenticated requests
+   - Frontend still requires Clerk keys for UI components
+
+5. **Clerk Dashboard Settings**
+
+   In your Clerk dashboard, configure:
+   - **Allowed origins**: Add `http://localhost:3000` for local development
+   - **Sign-in/Sign-up URLs**: Match your environment variables
+
 ### Development
 
 ```bash

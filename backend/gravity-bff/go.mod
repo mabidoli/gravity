@@ -3,6 +3,7 @@ module github.com/mabidoli/gravity-bff
 go 1.21
 
 require (
+	github.com/clerk/clerk-sdk-go/v2 v2.3.1
 	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/redis/go-redis/v9 v9.7.0

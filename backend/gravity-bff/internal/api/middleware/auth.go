@@ -1,48 +1,58 @@
 package middleware
 
 import (
+	"context"
+	"os"
 	"strings"
 
+	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/mabidoli/gravity-bff/internal/domain/model"
 )
 
-// ============================================================================
-// WARNING: DEVELOPMENT-ONLY AUTHENTICATION MIDDLEWARE
-// ============================================================================
-// This authentication middleware is a PLACEHOLDER for development and testing.
-// It MUST be replaced with proper JWT validation before production deployment.
-//
-// Current limitations (INSECURE):
-// - No JWT signature verification
-// - Bearer token used directly as user ID
-// - Fallback to hardcoded "default-user" when no auth header present
-//
-// Production requirements:
-// - Implement proper JWT validation (RS256 or ES256)
-// - Verify token signature against public key
-// - Validate token expiration (exp claim)
-// - Extract user ID from validated token claims
-// - Remove default-user fallback
-// - Add rate limiting for failed auth attempts
-// ============================================================================
+// clerkClient is initialized once with the secret key.
+var clerkClient *clerk.Client
 
-// Auth returns a middleware that validates authentication.
-//
-// SECURITY WARNING: This is a development-only placeholder.
-// DO NOT use in production without implementing proper JWT validation.
-func Auth() fiber.Handler {
+// InitClerk initializes the Clerk client with the secret key.
+// This should be called during application startup.
+func InitClerk() error {
+	secretKey := os.Getenv("CLERK_SECRET_KEY")
+	if secretKey == "" {
+		return nil // Allow nil client for development mode
+	}
+
+	client, err := clerk.NewClient(secretKey)
+	if err != nil {
+		return err
+	}
+	clerkClient = client
+	return nil
+}
+
+// ClerkAuth returns a middleware that validates Clerk JWT tokens.
+// It extracts the user ID from the validated token and sets it in the context.
+func ClerkAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get Authorization header
 		authHeader := c.Get("Authorization")
 
-		// WARNING: Development-only bypass - remove before production!
-		// For development, allow requests without auth
+		// Development mode: allow requests without auth if CLERK_SECRET_KEY is not set
+		if clerkClient == nil {
+			if authHeader == "" {
+				// Development fallback - allows unauthenticated access
+				c.Locals("userID", "dev-user")
+				return c.Next()
+			}
+		}
+
+		// Require authorization header in production
 		if authHeader == "" {
-			// INSECURE: Hardcoded default user - must be removed for production
-			c.Locals("userID", "default-user")
-			return c.Next()
+			return c.Status(fiber.StatusUnauthorized).JSON(model.NewErrorResponse(
+				model.ErrCodeUnauthorized,
+				"Authorization header is required",
+			))
 		}
 
 		// Extract token (Bearer <token>)
@@ -54,19 +64,6 @@ func Auth() fiber.Handler {
 		}
 
 		token := strings.TrimPrefix(authHeader, "Bearer ")
-
-		// SECURITY TODO: Implement proper JWT validation here:
-		// 1. Parse the JWT token
-		// 2. Verify signature against public key
-		// 3. Check expiration (exp) and not-before (nbf) claims
-		// 4. Validate issuer (iss) and audience (aud) claims
-		// 5. Extract user ID from claims (sub or custom claim)
-		//
-		// Example with a JWT library:
-		// claims, err := jwt.ValidateToken(token, publicKey)
-		// if err != nil { return unauthorized }
-		// userID := claims.Subject
-
 		if token == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(model.NewErrorResponse(
 				model.ErrCodeUnauthorized,
@@ -74,10 +71,42 @@ func Auth() fiber.Handler {
 			))
 		}
 
-		// INSECURE: Using token directly as user ID - replace with JWT claims
-		// Set user ID in context
-		c.Locals("userID", token)
+		// Development mode with token but no Clerk client
+		if clerkClient == nil {
+			// In development, use token as user ID for testing
+			c.Locals("userID", "dev-user")
+			return c.Next()
+		}
+
+		// Verify the JWT token using Clerk
+		claims, err := jwt.Verify(context.Background(), &jwt.VerifyParams{
+			Token: token,
+		})
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(model.NewErrorResponse(
+				model.ErrCodeUnauthorized,
+				"Invalid or expired token",
+			))
+		}
+
+		// Extract user ID from the subject claim
+		userID := claims.Subject
+		if userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(model.NewErrorResponse(
+				model.ErrCodeUnauthorized,
+				"Token missing user identifier",
+			))
+		}
+
+		// Set user ID in context for downstream handlers
+		c.Locals("userID", userID)
 
 		return c.Next()
 	}
+}
+
+// Auth is an alias for ClerkAuth for backward compatibility.
+// Deprecated: Use ClerkAuth() instead.
+func Auth() fiber.Handler {
+	return ClerkAuth()
 }
