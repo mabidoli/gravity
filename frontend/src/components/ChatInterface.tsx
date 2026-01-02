@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { MessageBubble } from "./MessageBubble";
 import { SourceIcon, getSourceLabel } from "./SourceIcon";
 import { useGravityStore } from "@/store/useGravityStore";
-import { Send, ArrowLeft, MoreVertical, ExternalLink } from "lucide-react";
+import { useStreamItem, useOptimisticUpdate } from "@/hooks/useStream";
+import { Send, ArrowLeft, MoreVertical, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ChatInterface() {
@@ -16,13 +17,30 @@ export function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
-    getSelectedItem,
+    selectedItemId,
     sendMessage,
     setMobileViewingChat,
     openContextModal,
+    setLocalItem,
+    getLocalItem,
   } = useGravityStore();
 
-  const selectedItem = getSelectedItem();
+  // Fetch item details from API
+  const { data: apiItem, isLoading } = useStreamItem(selectedItemId);
+  const { markAsRead } = useOptimisticUpdate();
+
+  // Get item from local cache (for local mutations) or API
+  const localItem = selectedItemId ? getLocalItem(selectedItemId) : undefined;
+  const selectedItem = localItem || apiItem;
+
+  // Sync API data to local cache when it arrives
+  useEffect(() => {
+    if (apiItem && !localItem) {
+      setLocalItem(apiItem);
+      // Mark as read when viewing
+      markAsRead(apiItem.id);
+    }
+  }, [apiItem, localItem, setLocalItem, markAsRead]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -44,8 +62,8 @@ export function ChatInterface() {
     }
   };
 
-  // Empty state
-  if (!selectedItem) {
+  // Empty state - no item selected
+  if (!selectedItemId) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-slate-500">
         <div className="h-20 w-20 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
@@ -56,6 +74,33 @@ export function ChatInterface() {
         </h2>
         <p className="text-sm">
           Choose an item from the stream to view the conversation
+        </p>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isLoading && !selectedItem) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-slate-500">
+        <Loader2 size={32} className="mb-2 animate-spin" />
+        <p className="text-sm">Loading conversation...</p>
+      </div>
+    );
+  }
+
+  // No item found
+  if (!selectedItem) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-slate-500">
+        <div className="h-20 w-20 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
+          <Send size={32} className="opacity-50" />
+        </div>
+        <h2 className="text-lg font-medium text-slate-400 mb-2">
+          Conversation not found
+        </h2>
+        <p className="text-sm">
+          This item may have been removed or is unavailable
         </p>
       </div>
     );

@@ -1,10 +1,8 @@
 import { create } from "zustand";
-import { PriorityItem, Message, FilterType, AIInsight } from "@/types";
-import { mockStreamItems } from "@/data/mockData";
+import { PriorityItem, Message, FilterType } from "@/types";
 
 interface GravityState {
-  // Stream state
-  items: PriorityItem[];
+  // UI state
   selectedItemId: string | null;
   filter: FilterType;
   isMobileViewingChat: boolean;
@@ -13,36 +11,38 @@ interface GravityState {
   isContextModalOpen: boolean;
   contextModalMessage: Message | null;
 
+  // Local item cache (for optimistic updates and message mutations)
+  localItems: Map<string, PriorityItem>;
+
   // Actions
   setFilter: (filter: FilterType) => void;
   selectItem: (itemId: string | null) => void;
-  markAsRead: (itemId: string) => void;
   setMobileViewingChat: (viewing: boolean) => void;
 
   // Modal actions
   openContextModal: (message: Message) => void;
   closeContextModal: () => void;
 
-  // Message actions
+  // Local cache actions
+  setLocalItem: (item: PriorityItem) => void;
+  getLocalItem: (itemId: string) => PriorityItem | undefined;
+  clearLocalItems: () => void;
+
+  // Message actions (operate on local cache)
   sendMessage: (itemId: string, content: string) => void;
   updateEventTime: (itemId: string, messageId: string, newStartTime: string, newEndTime: string) => void;
   refineDraft: (itemId: string, messageId: string, insightId: string, refinement: string) => void;
   regenerateDraft: (itemId: string, messageId: string, insightId: string) => void;
-
-  // Computed
-  getFilteredItems: () => PriorityItem[];
-  getSelectedItem: () => PriorityItem | undefined;
-  getUnreadCount: () => number;
 }
 
 export const useGravityStore = create<GravityState>((set, get) => ({
-  // Initial state
-  items: mockStreamItems,
+  // Initial UI state
   selectedItemId: null,
   filter: "all",
   isMobileViewingChat: false,
   isContextModalOpen: false,
   contextModalMessage: null,
+  localItems: new Map(),
 
   // Filter actions
   setFilter: (filter) => set({ filter }),
@@ -50,17 +50,7 @@ export const useGravityStore = create<GravityState>((set, get) => ({
   // Selection actions
   selectItem: (itemId) => {
     set({ selectedItemId: itemId, isMobileViewingChat: itemId !== null });
-    if (itemId) {
-      get().markAsRead(itemId);
-    }
   },
-
-  markAsRead: (itemId) =>
-    set((state) => ({
-      items: state.items.map((item) =>
-        item.id === itemId ? { ...item, unread: false } : item
-      ),
-    })),
 
   setMobileViewingChat: (viewing) => set({ isMobileViewingChat: viewing }),
 
@@ -71,12 +61,24 @@ export const useGravityStore = create<GravityState>((set, get) => ({
   closeContextModal: () =>
     set({ isContextModalOpen: false, contextModalMessage: null }),
 
-  // Message actions
+  // Local cache actions
+  setLocalItem: (item) =>
+    set((state) => {
+      const newMap = new Map(state.localItems);
+      newMap.set(item.id, item);
+      return { localItems: newMap };
+    }),
+
+  getLocalItem: (itemId) => get().localItems.get(itemId),
+
+  clearLocalItems: () => set({ localItems: new Map() }),
+
+  // Message actions (operate on local cache for optimistic updates)
   sendMessage: (itemId, content) => {
     const lowerContent = content.toLowerCase();
 
     set((state) => {
-      const item = state.items.find((i) => i.id === itemId);
+      const item = state.localItems.get(itemId);
       if (!item) return state;
 
       const userMessage: Message = {
@@ -94,7 +96,7 @@ export const useGravityStore = create<GravityState>((set, get) => ({
         const timeMatch = content.match(/(\d{1,2})\s*(pm|am|:00)?/i);
         if (timeMatch) {
           const hour = parseInt(timeMatch[1]);
-          const isPM = timeMatch[2]?.toLowerCase() === "pm" || hour >= 1 && hour <= 6;
+          const isPM = timeMatch[2]?.toLowerCase() === "pm" || (hour >= 1 && hour <= 6);
           const formattedHour = isPM && hour < 12 ? hour : hour;
           const newStartTime = `${formattedHour}:00 ${isPM ? "PM" : "AM"}`;
           const newEndTime = `${formattedHour + 1}:00 ${isPM ? "PM" : "AM"}`;
@@ -124,11 +126,9 @@ export const useGravityStore = create<GravityState>((set, get) => ({
 
           updatedMessages.push(systemMessage);
 
-          return {
-            items: state.items.map((i) =>
-              i.id === itemId ? { ...i, messages: updatedMessages } : i
-            ),
-          };
+          const newMap = new Map(state.localItems);
+          newMap.set(itemId, { ...item, messages: updatedMessages });
+          return { localItems: newMap };
         }
       }
 
@@ -151,7 +151,7 @@ export const useGravityStore = create<GravityState>((set, get) => ({
               id: `insight-${Date.now()}`,
               type: "analysis",
               label: "📊 Key Points",
-              content: getDetailedSummary(item.source),
+              content: getDetailedSummary(),
               isDraft: false,
             },
           ],
@@ -159,121 +159,98 @@ export const useGravityStore = create<GravityState>((set, get) => ({
         newMessages.push(summaryMessage);
       }
 
-      return {
-        items: state.items.map((i) =>
-          i.id === itemId ? { ...i, messages: newMessages } : i
-        ),
-      };
+      const newMap = new Map(state.localItems);
+      newMap.set(itemId, { ...item, messages: newMessages });
+      return { localItems: newMap };
     });
   },
 
   updateEventTime: (itemId, messageId, newStartTime, newEndTime) =>
-    set((state) => ({
-      items: state.items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              messages: item.messages.map((msg) =>
-                msg.id === messageId && msg.eventDetails
-                  ? {
-                      ...msg,
-                      eventDetails: {
-                        ...msg.eventDetails,
-                        startTime: newStartTime,
-                        endTime: newEndTime,
-                      },
-                    }
-                  : msg
-              ),
-            }
-          : item
-      ),
-    })),
+    set((state) => {
+      const item = state.localItems.get(itemId);
+      if (!item) return state;
+
+      const updatedItem = {
+        ...item,
+        messages: item.messages.map((msg) =>
+          msg.id === messageId && msg.eventDetails
+            ? {
+                ...msg,
+                eventDetails: {
+                  ...msg.eventDetails,
+                  startTime: newStartTime,
+                  endTime: newEndTime,
+                },
+              }
+            : msg
+        ),
+      };
+
+      const newMap = new Map(state.localItems);
+      newMap.set(itemId, updatedItem);
+      return { localItems: newMap };
+    }),
 
   refineDraft: (itemId, messageId, insightId, refinement) =>
-    set((state) => ({
-      items: state.items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              messages: item.messages.map((msg) =>
-                msg.id === messageId
-                  ? {
-                      ...msg,
-                      aiInsights: msg.aiInsights?.map((insight) =>
-                        insight.id === insightId
-                          ? {
-                              ...insight,
-                              content: getRefinedDraft(insight.content, refinement),
-                            }
-                          : insight
-                      ),
-                    }
-                  : msg
-              ),
-            }
-          : item
-      ),
-    })),
+    set((state) => {
+      const item = state.localItems.get(itemId);
+      if (!item) return state;
+
+      const updatedItem = {
+        ...item,
+        messages: item.messages.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                aiInsights: msg.aiInsights?.map((insight) =>
+                  insight.id === insightId
+                    ? {
+                        ...insight,
+                        content: getRefinedDraft(insight.content, refinement),
+                      }
+                    : insight
+                ),
+              }
+            : msg
+        ),
+      };
+
+      const newMap = new Map(state.localItems);
+      newMap.set(itemId, updatedItem);
+      return { localItems: newMap };
+    }),
 
   regenerateDraft: (itemId, messageId, insightId) =>
-    set((state) => ({
-      items: state.items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              messages: item.messages.map((msg) =>
-                msg.id === messageId
-                  ? {
-                      ...msg,
-                      aiInsights: msg.aiInsights?.map((insight) =>
-                        insight.id === insightId
-                          ? {
-                              ...insight,
-                              content: getRegeneratedDraft(),
-                            }
-                          : insight
-                      ),
-                    }
-                  : msg
-              ),
-            }
-          : item
-      ),
-    })),
+    set((state) => {
+      const item = state.localItems.get(itemId);
+      if (!item) return state;
 
-  // Computed values
-  getFilteredItems: () => {
-    const { items, filter } = get();
-    let filteredItems = [...items];
+      const updatedItem = {
+        ...item,
+        messages: item.messages.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                aiInsights: msg.aiInsights?.map((insight) =>
+                  insight.id === insightId
+                    ? {
+                        ...insight,
+                        content: getRegeneratedDraft(),
+                      }
+                    : insight
+                ),
+              }
+            : msg
+        ),
+      };
 
-    if (filter === "high") {
-      filteredItems = filteredItems.filter((item) => item.priority === "high");
-    } else if (filter === "unread") {
-      filteredItems = filteredItems.filter((item) => item.unread);
-    }
-
-    // Sort by priority then timestamp
-    return filteredItems.sort((a, b) => {
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
-      }
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
-  },
-
-  getSelectedItem: () => {
-    const { items, selectedItemId } = get();
-    return items.find((item) => item.id === selectedItemId);
-  },
-
-  getUnreadCount: () => {
-    return get().items.filter((item) => item.unread).length;
-  },
+      const newMap = new Map(state.localItems);
+      newMap.set(itemId, updatedItem);
+      return { localItems: newMap };
+    }),
 }));
 
-// Helper functions for mock AI responses
+// Helper functions for mock AI responses (temporary until backend AI integration)
 function getSummaryContent(source: string): string {
   const summaries: Record<string, string> = {
     youtube:
@@ -286,7 +263,7 @@ function getSummaryContent(source: string): string {
   return summaries[source] || "Summary not available for this content type.";
 }
 
-function getDetailedSummary(source: string): string {
+function getDetailedSummary(): string {
   return `Based on my analysis, here are the most important points:\n\n1. The main argument centers around emerging technology trends\n2. Several actionable insights are provided\n3. The conclusion suggests further reading on related topics\n\nWould you like me to extract any specific information?`;
 }
 
