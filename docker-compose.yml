@@ -1,0 +1,111 @@
+version: '3.8'
+
+# Gravity V2 Full Stack Docker Compose
+# Run with: docker-compose up -d
+
+services:
+  # Frontend - Next.js Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - gravity-network
+
+  # Backend - Go BFF API
+  api:
+    build:
+      context: ./backend/gravity-bff
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - API_PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=gravity
+      - DB_PASSWORD=secret
+      - DB_NAME=gravity_db
+      - DB_SSL_MODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gravity-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: gravity
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: gravity_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gravity -d gravity_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gravity-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gravity-network
+
+  # Database Migrations
+  migrate:
+    image: migrate/migrate:v4.17.0
+    volumes:
+      - ./backend/gravity-bff/migrations:/migrations:ro
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://gravity:secret@postgres:5432/gravity_db?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gravity-network
+
+networks:
+  gravity-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

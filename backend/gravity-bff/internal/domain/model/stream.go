@@ -9,15 +9,15 @@ type User struct {
 	ID        string  `json:"id" db:"id"`
 	Name      string  `json:"name" db:"name"`
 	Email     *string `json:"email,omitempty" db:"email"`
-	AvatarURL *string `json:"avatarUrl,omitempty" db:"avatar_url"`
+	AvatarURL *string `json:"avatar,omitempty" db:"avatar_url"`
 }
 
 // Attachment represents a file attached to a message.
 type Attachment struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	MimeType  string `json:"mimeType"`
-	SizeBytes int64  `json:"sizeBytes"`
+	MimeType  string `json:"type"`
+	SizeBytes int64  `json:"size"`
 	URL       string `json:"url"`
 }
 
@@ -46,8 +46,8 @@ type SocialContent struct {
 	ID              string         `json:"id"`
 	Platform        SocialPlatform `json:"platform"`
 	Author          string         `json:"author"`
-	AuthorAvatarURL *string        `json:"authorAvatarUrl,omitempty"`
-	ThumbnailURL    *string        `json:"thumbnailUrl,omitempty"`
+	AuthorAvatarURL *string        `json:"authorAvatar,omitempty"`
+	ThumbnailURL    *string        `json:"thumbnail,omitempty"`
 	Title           *string        `json:"title,omitempty"`
 	Description     *string        `json:"description,omitempty"`
 	Stats           SocialStats    `json:"stats"`
@@ -66,16 +66,16 @@ type AIInsight struct {
 // Message represents a single message in a conversation thread.
 type Message struct {
 	ID              string         `json:"id" db:"id"`
-	SenderType      SenderType     `json:"senderType" db:"sender_type"`
+	SenderType      SenderType     `json:"sender" db:"sender_type"`
 	SenderInfo      *User          `json:"senderInfo,omitempty"`
 	Content         string         `json:"content" db:"content"`
 	Timestamp       time.Time      `json:"timestamp" db:"message_timestamp"`
-	ContentType     ContentType    `json:"contentType" db:"content_type"`
+	ContentType     ContentType    `json:"type" db:"content_type"`
 	EventDetails    *CalendarEvent `json:"eventDetails,omitempty"`
 	SocialContent   *SocialContent `json:"socialContent,omitempty"`
 	AIInsights      []AIInsight    `json:"aiInsights,omitempty"`
 	Attachments     []Attachment   `json:"attachments,omitempty"`
-	FullContentHTML *string        `json:"fullContentHtml,omitempty" db:"full_content_html"`
+	FullContentHTML *string        `json:"fullContent,omitempty" db:"full_content_html"`
 }
 
 // PriorityItem represents a single item in the unified priority stream.
@@ -84,7 +84,7 @@ type PriorityItem struct {
 	Title        string     `json:"title" db:"title"`
 	Source       SourceType `json:"source" db:"source"`
 	Priority     Priority   `json:"priority" db:"priority"`
-	IsUnread     bool       `json:"isUnread" db:"is_unread"`
+	IsUnread     bool       `json:"unread" db:"is_unread"`
 	Snippet      *string    `json:"snippet,omitempty" db:"snippet"`
 	Timestamp    time.Time  `json:"timestamp" db:"item_timestamp"`
 	Participants []User     `json:"participants"`

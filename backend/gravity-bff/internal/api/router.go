@@ -3,7 +3,6 @@ package api
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 
 	"github.com/mabidoli/gravity-bff/internal/api/handler"
@@ -37,11 +36,7 @@ func (r *Router) Setup(app *fiber.App) {
 	app.Use(requestid.New())
 	app.Use(middleware.Recovery(r.log))
 	app.Use(middleware.RequestLogger(r.log))
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-Request-ID",
-	}))
+	app.Use(middleware.CORSMiddleware())
 
 	// Health check endpoint (no auth required)
 	app.Get("/health", r.healthHandler.GetHealth)
