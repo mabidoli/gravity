@@ -1,0 +1,22 @@
+# Production Environment Variables
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to version control
+
+# AWS Configuration
+aws_region   = "us-east-1"  # Change to your preferred region
+project_name = "gravity"
+environment  = "prod"
+
+# Database Configuration
+# TODO: Generate a strong password and store it securely
+db_password = "CHANGE_ME_TO_STRONG_PASSWORD"
+
+# Docker Images
+# TODO: Update with your actual ECR repository URLs after creating them
+frontend_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/gravity-frontend:latest"
+backend_image  = "123456789012.dkr.ecr.us-east-1.amazonaws.com/gravity-backend:latest"
+
+# SSL Certificate (optional)
+# TODO: Create an ACM certificate and paste the ARN here for HTTPS
+# Leave empty to use HTTP only (not recommended for production)
+certificate_arn = ""
