@@ -15,6 +15,7 @@ import (
 
 	"github.com/mabidoli/gravity-bff/internal/api"
 	"github.com/mabidoli/gravity-bff/internal/api/handler"
+	"github.com/mabidoli/gravity-bff/internal/api/middleware"
 	"github.com/mabidoli/gravity-bff/internal/cache"
 	"github.com/mabidoli/gravity-bff/internal/config"
 	"github.com/mabidoli/gravity-bff/internal/repository"
@@ -34,6 +35,12 @@ func main() {
 	}
 
 	log.Info("Configuration loaded successfully")
+
+	// Initialize Clerk authentication
+	if err := middleware.InitClerk(); err != nil {
+		log.Fatal("Failed to initialize Clerk: %v", err)
+	}
+	log.Info("Clerk authentication initialized")
 
 	// Initialize database connection
 	db, err := initDatabase(cfg, log)

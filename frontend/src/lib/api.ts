@@ -26,6 +26,16 @@ class ApiError extends Error {
   }
 }
 
+// Token getter function - will be set by the auth hook
+let getTokenFn: (() => Promise<string | null>) | null = null;
+
+/**
+ * Sets the token getter function. Called by useAuthenticatedApi hook.
+ */
+export function setTokenGetter(fn: () => Promise<string | null>) {
+  getTokenFn = fn;
+}
+
 async function fetchWithAuth<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -37,10 +47,12 @@ async function fetchWithAuth<T>(
     ...options.headers,
   };
 
-  // Add auth token if available (will be replaced with Clerk in Phase 4.2)
-  const token = getAuthToken();
-  if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+  // Get Clerk session token
+  if (getTokenFn) {
+    const token = await getTokenFn();
+    if (token) {
+      (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    }
   }
 
   const response = await fetch(url, {
@@ -50,21 +62,14 @@ async function fetchWithAuth<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiError(401, "Unauthorized - please sign in");
+    }
     const errorMessage = await response.text().catch(() => "Unknown error");
     throw new ApiError(response.status, errorMessage);
   }
 
   return response.json();
-}
-
-// Placeholder for auth token retrieval - will be replaced with Clerk
-function getAuthToken(): string | null {
-  // In Phase 4.2, this will be replaced with:
-  // return await clerk.session?.getToken();
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("auth_token");
-  }
-  return null;
 }
 
 export const api = {
