@@ -81,6 +81,9 @@ func main() {
 		WriteTimeout:          cfg.Server.WriteTimeout,
 		IdleTimeout:           cfg.Server.IdleTimeout,
 		DisableStartupMessage: true,
+		// Increase buffer sizes to handle large headers (cookies, JWTs)
+		ReadBufferSize:  16384, // 16KB
+		WriteBufferSize: 16384, // 16KB
 	})
 
 	// Setup routes
