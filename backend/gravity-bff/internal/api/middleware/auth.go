@@ -12,22 +12,19 @@ import (
 	"github.com/mabidoli/gravity-bff/internal/domain/model"
 )
 
-// clerkClient is initialized once with the secret key.
-var clerkClient *clerk.Client
+// clerkInitialized tracks whether Clerk has been configured.
+var clerkInitialized bool
 
-// InitClerk initializes the Clerk client with the secret key.
+// InitClerk initializes the Clerk SDK with the secret key.
 // This should be called during application startup.
 func InitClerk() error {
 	secretKey := os.Getenv("CLERK_SECRET_KEY")
 	if secretKey == "" {
-		return nil // Allow nil client for development mode
+		return nil // Allow uninitialized for development mode
 	}
 
-	client, err := clerk.NewClient(secretKey)
-	if err != nil {
-		return err
-	}
-	clerkClient = client
+	clerk.SetKey(secretKey)
+	clerkInitialized = true
 	return nil
 }
 
@@ -39,7 +36,7 @@ func ClerkAuth() fiber.Handler {
 		authHeader := c.Get("Authorization")
 
 		// Development mode: allow requests without auth if CLERK_SECRET_KEY is not set
-		if clerkClient == nil {
+		if !clerkInitialized {
 			if authHeader == "" {
 				// Development fallback - allows unauthenticated access
 				c.Locals("userID", "dev-user")
@@ -71,8 +68,8 @@ func ClerkAuth() fiber.Handler {
 			))
 		}
 
-		// Development mode with token but no Clerk client
-		if clerkClient == nil {
+		// Development mode with token but Clerk not initialized
+		if !clerkInitialized {
 			// In development, use token as user ID for testing
 			c.Locals("userID", "dev-user")
 			return c.Next()

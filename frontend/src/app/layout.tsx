@@ -18,19 +18,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Wrap with ClerkProvider only if configured
-  const content = (
-    <html lang="en" className="dark">
-      <body className="font-sans antialiased">
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
-
+  // When Clerk is not configured, render without ClerkProvider
   if (!isClerkConfigured) {
-    return content;
+    return (
+      <html lang="en" className="dark">
+        <body className="font-sans antialiased">
+          <Providers>{children}</Providers>
+        </body>
+      </html>
+    );
   }
 
+  // When Clerk is configured, wrap Providers inside ClerkProvider
   return (
     <ClerkProvider
       appearance={{
@@ -43,7 +42,11 @@ export default function RootLayout({
         },
       }}
     >
-      {content}
+      <html lang="en" className="dark">
+        <body className="font-sans antialiased">
+          <Providers>{children}</Providers>
+        </body>
+      </html>
     </ClerkProvider>
   );
 }
